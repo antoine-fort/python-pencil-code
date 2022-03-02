@@ -109,7 +109,7 @@ def pvarTra(*args,**kwargs):
     pvar.update(200)
     pvar.slicePlot(-0.1,0.1,2)
     pvar.plot2d(0,1,2)
-    pvar.updateBoundaries(0.05,200,250,5)
+    pvar.updateBoundaries(200,250,5)
     pvar.update(250)
     pvar.slicePlot(-0.1,0.1,2)
     pvar.plot2d(0,1,2)
@@ -132,25 +132,24 @@ class dataTracers(object):
 
     def __init__(self,varfile="pvar.dat",datadir="./data",proc=-1,border_axis=0,border=0.0):
 
-        pvar=pc_old.read_pvar(varfile,datadir="./data",proc=-1)
-        var=pc.read.var(varfile[1:])
+        print("Reading of "+varfile)
+        pvar=pc_old.read_pvar(varfile,datadir="./data",proc=-1)#reading of pvar
         id=pvar.ipars
         pos=np.array([pvar.xp,pvar.yp,pvar.zp])
 
-        pos=sort_position(id,pos)
+        pos=sort_position(id,pos)#sort the list pos in function of id (to decrease complexity later on)
 
-        true_color=np.array(["blue"]*len(id))
+        print("Creation of the border : axis="+str(border_axis)+" border="+str(border))
+        true_color=np.array(["blue"]*len(id))#creating the border
         for k in range(0,len(id)):
             if pos[border_axis][k]>border:
                 true_color[k]="red"
 
-        self.true_clr=true_color
+        self.true_clr=true_color#assigning the values to the class
         self.id=id
         self.pos=pos
-        self.t=var.t
         self.nb=int(varfile[4:])
         self.scale=np.array([50]*len(self.id))
-
         box=pc.read.grid()
         self.grid_size=[-box.Lx/2,box.Lx/2,-box.Ly/2,box.Ly/2,-box.Lz/2,box.Lz/2]
 
@@ -160,6 +159,8 @@ class dataTracers(object):
 
 
     def update(self,n):
+
+        print("Update to snaphot PVAR"+str(n)+". Does not check the colours.")
 
         pvar=pc_old.read_pvar(varfile="PVAR"+str(n))
 
@@ -172,7 +173,7 @@ class dataTracers(object):
         self.pos=pos
         self.id=id
 
-    def slicePlot(self,bslice,fslice,axis=3,size=50):
+    def slicePlot(self,bslice,fslice,axis=2,size=50):
 
         self.scale=np.array([size]*len(self.id))
 
@@ -180,36 +181,53 @@ class dataTracers(object):
             if self.pos[axis][k]<bslice or self.pos[axis][k]>fslice :
                 self.scale[k]=0
 
-    def plot2d(self,x,y,z,alpha=0.3):
+    def plot2d(self,x,y,alpha=0.3,namefile="true"):
 
         fig, ax = plt.subplots()
-        ax.scatter(self.pos[x], self.pos[y], c=self.true_clr, s=self.scale, alpha=alpha, edgecolors='none')
+        ax.scatter(self.pos[x], self.pos[y], c=self.true_clr, s=self.scale, alpha=alpha, edgecolors='none',label=self.true_clr)#x, y, z are numbers
 
+
+        plt.xlabel("x-axis :"+str(x))
+        plt.ylabel("y-axis :"+str(y))
         ax.legend()
         ax.grid(True)
-        plt.title("map of the tracers with color red=ice blue=vapour PVAR")
-        plt.savefig("./data/figures/plot2d"+str(self.nb)+".jpg")
+        plt.title("Map of the tracers with color red=ice blue=vapour PVAR"+str(self.nb))
+        if namefile=="true":#check if you want another namefile than the normal one
+            namefile="./data/figures/plot2d"+str(self.nb)+".jpg"
+        plt.savefig(namefile)
+        plt.close()
 
-    def plot3d(self,x=0,y=1,z=2,alpha=0.02):
+    def plot3d(self,x=0,y=1,z=2,alpha=0.02,namefile="true"):
 
         fig = plt.figure()
         ax = fig.add_subplot(111,projection='3d')
         ax.scatter(self.pos[x], self.pos[y], self.pos[z], c=self.true_clr, s=self.scale, alpha=alpha, edgecolors='none')
+        plt.xlabel("x-axis :"+str(x))
+        plt.ylabel("y-axis :"+str(y))
+        plt.zlabel("z-axis :"+str(z))
         ax.legend()
         ax.grid(True)
 
-        plt.savefig("./data/figures/plot3d"+str(self.nb)+".jpg")
+        if namefile=="true":#check if you want another namefile than the normal one
+            namefile="./data/figures/plot3d"+str(self.nb)+".jpg"
+        plt.savefig(namefile)
+        plt.close()
 
     def updateBoundaries(self,tbeg,tend,tstep):
+
+        print("Updating the boudaries along the snapshots")
+
+
         bsize=self.grid_size[1]
         for i in range(tbeg+tstep,tend+tstep,tstep):
+            #function is checking the different snapshots
             print("updateBoundaries reading of PVAR"+str(i))
             pvar=pc_old.read_pvar(varfile="PVAR"+str(i))
             pos=np.array([pvar.xp,pvar.yp,pvar.zp])
             id=pvar.ipars
-
             pos=sort_position(id,pos)
 
+            #the condition to know if the tracer has crossed the x-boundaries
             for l in range(0,len(self.true_clr)):
                 if (pos[0][l]*self.pos[0][l])<(-1)*((bsize/2)**2):
                     if self.true_clr[l]=="blue":
@@ -222,6 +240,9 @@ class dataTracers(object):
         self.nb=tend
 
     def nearestNeighborsClr(self,nb_neighbors=4):
+
+        print("cKDtree routine")
+        #creation of the CKD tree to check where are the neigbors of every tracer
         pos=self.pos.T
         tree=scp.spatial.cKDTree(pos)
         clrdiff=[]
@@ -229,10 +250,10 @@ class dataTracers(object):
         for l in range(len(pos)):
             if l > len(pos)/100*counter:
                 print("nearestNeighborsClr creating the cKDTree :"+str(l/len(pos)*100))
-                counter+=1
+                counter+=10
             d,i=tree.query(pos[l],nb_neighbors+1)
             clrcount=0
-            for k in range(1,len(i)):
+            for k in range(1,len(i)):#count the colors
                 if self.true_clr[i[k]]=="blue" :
                     clrcount-=1
                 else:
@@ -241,7 +262,11 @@ class dataTracers(object):
         self.clrdiff=np.array(clrdiff)
 
     def create3dGrid(self,part_size):
+
+        print("Create the 3d grid")
+
         grid_size=self.grid_size
+        #not really beautiful but it´s working
         x=np.linspace(grid_size[0]+(grid_size[1]-grid_size[0])/(2*part_size[0]),grid_size[1]-(grid_size[1]-grid_size[0])/(2*part_size[0]),part_size[0])
         y=np.linspace(grid_size[2]+(grid_size[3]-grid_size[2])/(2*part_size[1]),grid_size[3]-(grid_size[3]-grid_size[2])/(2*part_size[1]),part_size[1])
         z=np.linspace(grid_size[4]+(grid_size[5]-grid_size[4])/(2*part_size[2]),grid_size[5]-(grid_size[5]-grid_size[4])/(2*part_size[2]),part_size[2])
@@ -254,8 +279,7 @@ class dataTracers(object):
                     xx.append(x[i])
                     yy.append(y[j])
                     zz.append(z[k])
-        inter_grid=scp.interpolate.griddata((self.pos[0],self.pos[1],self.pos[2]),self.clrdiff,(xx,yy,zz))
-
+        inter_grid=scp.interpolate.griddata((self.pos[0],self.pos[1],self.pos[2]),self.clrdiff,(xx,yy,zz))#linearize the values given by the tracers' positions
         values_ongrid=np.zeros((part_size[0],part_size[1],part_size[2]))
         for i in range(len(x)):
             for j in range(len(y)):
@@ -265,19 +289,23 @@ class dataTracers(object):
 
         self.tra_neigh_field=np.array(values_ongrid)
 
-    def plot2dTraNeighField(self,layer,x=0,y=1,z=2):
+    def plot2dTraNeighField(self,layer,x=0,y=1,z=2,namefile="true"):
         fig, ax = plt.subplots()
+        #not really beautiful but it´s working
         if z==0:
             plt.imshow(self.tra_neigh_field[layer,:,:].T, origin='lower', extent=[self.grid_size[x*2+0], self.grid_size[x*2+1],self.grid_size[y*2+0],self.grid_size[y*2+1]], interpolation='nearest', cmap='jet')
         if z==1:
             plt.imshow(self.tra_neigh_field[:,layer,:].T, origin='lower', extent=[self.grid_size[x*2+0], self.grid_size[x*2+1],self.grid_size[y*2+0],self.grid_size[y*2+1]], interpolation='nearest', cmap='jet')
         if z==2:
             plt.imshow(self.tra_neigh_field[:,:,layer].T, origin='lower', extent=[self.grid_size[x*2+0], self.grid_size[x*2+1],self.grid_size[y*2+0],self.grid_size[y*2+1]], interpolation='nearest', cmap='jet')
-        plt.xlabel("x")
-        plt.ylabel("y")
+        plt.xlabel("x-axis :"+str(x))
+        plt.ylabel("y-axis :"+str(y))
         cbar=plt.colorbar()
-        cbar.ax.set_ylabel("ux")
-        plt.title("2D graph of neighbors map (x,y) PVAR")
-        plt.savefig("./data/figures/plot2dTraNeighField"+str(self.nb)+".jpg")
+        cbar.ax.set_ylabel("mean color of tracer´s neighbors")
+        plt.title("2D graph of neighbors map PVAR"+str(self.nb))
+        if namefile=="true":
+            namefile="./data/figures/plot2dTraNeighField"+str(self.nb)+".jpg"
+        plt.savefig(namefile)
+        plt.close()
 
 
